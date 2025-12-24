@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Lead Agent | SDR Automation</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <style>
+        .loader { border: 3px solid #f3f3f3; border-top: 3px solid #2563eb; border-radius: 50%; width: 16px; height: 16px; animation: spin 1s linear infinite; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        [x-cloak] { display: none !important; }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-800 font-sans" x-data="appData()" x-init="init()" x-cloak>
+    
+    <div class="bg-white border-b px-6 py-4 flex justify-between items-center sticky top-0 z-40 shadow-sm">
+        <div class="flex items-center gap-2">
+            <h1 class="text-xl font-bold text-blue-700">🚀 AI Lead Agent</h1>
+        </div>
+        <div class="flex gap-4 items-center">
+            <span class="text-xs font-semibold text-gray-400 uppercase tracking-wider">Status: <span class="text-green-500">Connected to Render</span></span>
+            <button @click="showSettings = true" class="text-sm font-medium text-gray-600 hover:text-blue-600 flex items-center gap-2 border px-3 py-1.5 rounded hover:bg-gray-50 transition">
+                ⚙️ Settings
+            </button>
+        </div>
+    </div>
+
+    <div class="max-w-6xl mx-auto p-6">
+        <div class="bg-white p-6 rounded-lg shadow-sm border border-gray-200 mb-6">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Target Keywords</label>
+                    <input type="text" x-model="search.keywords" placeholder="e.g. Solar Panel Installers" class="w-full p-2 border rounded outline-none focus:border-blue-500">
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Target Location</label>
+                    <input type="text" x-model="search.location" placeholder="e.g. Austin, Texas" class="w-full p-2 border rounded outline-none focus:border-blue-500">
+                </div>
+            </div>
+            <button @click="startSearch" :disabled="loading" class="mt-4 w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded transition flex justify-center gap-2">
+                <span x-show="!loading">Find Leads</span>
+                <span x-show="loading" class="flex items-center gap-2"><div class="loader border-white border-t-transparent"></div> Searching & Scraping...</span>
+            </button>
+        </div>
+
+        <div x-show="results.length > 0">
+            <div class="flex justify-between items-center mb-4 px-1">
+                <span class="text-sm text-gray-500 font-bold" x-text="results.length + ' Leads Found'"></span>
+                <div class="flex gap-2">
+                    <button @click="draftEmails" :disabled="isDrafting" class="bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold py-2 px-4 rounded shadow flex items-center gap-2 transition disabled:opacity-50">
+                        📧 <span x-text="isDrafting ? 'Creating Drafts...' : 'Draft AI Emails'"></span>
+                    </button>
+                    <button @click="saveToSheets" class="bg-green-600 hover:bg-green-700 text-white text-sm font-bold py-2 px-4 rounded shadow flex items-center gap-2 transition">
+                        📄 Sync to Sheets
+                    </button>
+                </div>
+            </div>
+            <div class="bg-white shadow rounded-lg border overflow-hidden">
+                <table class="min-w-full text-sm text-left">
+                    <thead class="bg-gray-100 text-gray-600 uppercase">
+                        <tr>
+                            <th class="px-4 py-3">Business Information</th>
+                            <th class="px-4 py-3">Website</th>
+                            <th class="px-4 py-3">Contact Data</th>
+                            <th class="px-4 py-3">Outreach Status</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-gray-200">
+                        <template x-for="r in results" :key="r.rowId">
+                            <tr class="hover:bg-gray-50">
+                                <td class="px-4 py-3 align-top w-1/4">
+                                    <div class="font-bold text-gray-800" x-text="r.name"></div>
+                                    <div class="text-xs text-gray-400" x-text="r.address"></div>
+                                </td>
+                                <td class="px-4 py-3 align-top w-1/4">
+                                    <a :href="r.website" target="_blank" class="text-blue-500 hover:underline" x-show="r.website" x-text="r.website"></a>
+                                    <span x-show="!r.website" class="text-gray-300">No URL</span>
+                                </td>
+                                <td class="px-4 py-3 align-top w-1/4">
+                                    <div class="flex flex-col gap-1">
+                                        <div class="flex items-center gap-2">
+                                            <span x-show="!r.processed" class="loader"></span>
+                                            <span x-show="r.processed && !r.email" class="text-gray-400 italic text-xs">No Email Found</span>
+                                            <span x-show="r.email" class="text-green-700 font-bold bg-green-50 px-2 py-1 rounded text-xs" x-text="r.email"></span>
+                                        </div>
+                                        <div x-show="r.phone" class="text-xs text-gray-500" x-text="r.phone"></div>
+                                    </div>
+                                </td>
+                                <td class="px-4 py-3 align-top w-1/4">
+                                    <span x-show="r.draft_status" 
+                                          class="text-xs font-bold px-2 py-1 rounded border"
+                                          :class="{
+                                              'bg-green-100 text-green-700 border-green-200': r.draft_status.includes('✅'),
+                                              'bg-red-50 text-red-600 border-red-100': r.draft_status.includes('Error'),
+                                              'bg-yellow-50 text-yellow-600 border-yellow-100': r.draft_status.includes('Drafting')
+                                          }" 
+                                          x-text="r.draft_status">
+                                    </span>
+                                </td>
+                            </tr>
+                        </template>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <div x-show="showSettings" style="display: none;" class="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50">
+        <div class="bg-white rounded-lg shadow-xl w-full max-w-md p-6">
+            <h2 class="text-xl font-bold mb-4 border-b pb-2">Environment Config</h2>
+            <div class="space-y-4">
+                <p class="text-xs text-gray-500 italic">Settings are loaded from Render Environment Variables.</p>
+                <div>
+                    <label class="block text-xs font-bold text-gray-600 uppercase mb-1">Serper API Status</label>
+                    <div class="text-sm p-2 bg-gray-50 rounded border" x-text="config.serper_api_key ? '✅ Configured' : '❌ Missing'"></div>
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-gray-600 uppercase mb-1">Groq API Status</label>
+                    <div class="text-sm p-2 bg-gray-50 rounded border" x-text="config.groq_api_key ? '✅ Configured' : '❌ Missing'"></div>
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-gray-600 uppercase mb-1">Google Sheets ID</label>
+                    <div class="text-sm p-2 bg-gray-50 rounded border overflow-hidden text-ellipsis" x-text="config.google_sheet_id || 'Not Set'"></div>
+                </div>
+                <div class="pt-4 border-t">
+                    <label class="block text-xs font-bold text-gray-600 uppercase mb-1">Manual Action</label>
+                    <button @click="authGmail" class="w-full bg-blue-50 text-blue-700 border border-blue-200 py-2 rounded font-medium hover:bg-blue-100 transition">
+                        🔄 Refresh Gmail Auth
+                    </button>
+                </div>
+            </div>
+            <div class="mt-6 flex justify-end">
+                <button @click="showSettings = false" class="px-6 py-2 bg-blue-600 text-white rounded font-bold text-sm shadow-md hover:bg-blue-700 transition">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function appData() {
+            return {
+                showSettings: false, loading: false, isDrafting: false,
+                search: { keywords: '', location: '' },
+                config: { serper_api_key: '', groq_api_key: '', google_sheet_id: '', my_service_description: '' },
+                results: [],
+
+                async init() {
+                    try {
+                        // Use relative paths for Render deployment
+                        const res = await fetch('/api/config');
+                        this.config = await res.json();
+                    } catch(e) { console.error("Config failed to load", e); }
+                },
+
+                async authGmail() {
+                    alert("Ensure you have uploaded token.json to Render Secret Files!");
+                    await fetch('/api/auth-gmail', { method: 'POST' });
+                },
+
+                async startSearch() {
+                    if(!this.search.keywords) return alert("Enter keywords");
+                    this.loading = true; 
+                    this.results = [];
+                    try {
+                        const res = await fetch('/api/search', { 
+                            method: 'POST', 
+                            headers: {'Content-Type': 'application/json'}, 
+                            body: JSON.stringify(this.search) 
+                        });
+                        const data = await res.json();
+                        this.results = data.results.map(p => ({
+                            rowId: Math.random().toString(36).substr(2, 9),
+                            name: p.title, address: p.address, website: p.website || '', phone: p.phoneNumber || '',
+                            email: '', processed: false, draft_status: '', context: ''
+                        }));
+                        
+                        // Concurrent scraping limited to 5 at a time to stay under Render resource limits
+                        let queue = [...this.results];
+                        while(queue.length > 0) { 
+                            await Promise.all(queue.splice(0, 5).map(this.processItem.bind(this))); 
+                        }
+                    } catch(e) { 
+                        alert("Search failed. Check Render logs."); 
+                    } finally { this.loading = false; }
+                },
+
+                async processItem(item) {
+                    if(!item.website) { item.processed = true; return; }
+                    try {
+                        const res = await fetch('/api/scrape', {
+                            method: 'POST', headers: {'Content-Type': 'application/json'},
+                            body: JSON.stringify({ url: item.website })
+                        });
+                        const data = await res.json();
+                        item.email = data.email;
+                        if(data.phone) item.phone = data.phone;
+                        item.context = data.context; 
+                    } catch(e) { console.error("Scrape Error", e); } finally { item.processed = true; }
+                },
+
+                async draftEmails() {
+                    const validLeads = this.results.filter(r => r.email);
+                    if(validLeads.length === 0) return alert("No emails found to draft.");
+                    
+                    this.isDrafting = true;
+                    for (const lead of validLeads) {
+                         lead.draft_status = "Drafting...";
+                         try {
+                             const res = await fetch('/api/draft', {
+                                 method: 'POST',
+                                 headers: {'Content-Type': 'application/json'},
+                                 body: JSON.stringify({
+                                     email: lead.email,
+                                     name: lead.name,
+                                     location: lead.address,
+                                     context: lead.context 
+                                 })
+                             });
+                             const data = await res.json();
+                             lead.draft_status = data.msg;
+                         } catch(e) { 
+                             lead.draft_status = "Error";
+                         }
+                    }
+                    this.isDrafting = false;
+                    alert("Sync Complete: Check Gmail Drafts.");
+                },
+
+                async saveToSheets() {
+                    try {
+                        const res = await fetch('/api/save-sheets', { 
+                            method: 'POST', 
+                            headers: {'Content-Type': 'application/json'}, 
+                            body: JSON.stringify({ rows: this.results }) 
+                        });
+                        const data = await res.json();
+                        alert(data.status === 'success' ? "✅ Sync Successful!" : "❌ Error: " + data.message);
+                    } catch(e) { alert("Sheet sync failed."); }
+                }
+            }
+        }
+    </script>
+</body>
+</html>
