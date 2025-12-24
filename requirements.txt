@@ -1,0 +1,11 @@
+flask
+serverless-wsgi
+requests
+beautifulsoup4
+gspread 
+oauth2client
+groq
+google-api-python-client 
+google-auth-oauthlib 
+google-auth-httplib2
+#2ef09d62f2c13e0182440d4271c5498592d72e13
