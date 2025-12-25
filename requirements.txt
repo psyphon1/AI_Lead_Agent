@@ -11,4 +11,6 @@ google-auth-httplib2
 gunicorn
 selenium
 streamlit
+webdriver-manager
+
 
