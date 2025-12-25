@@ -174,7 +174,4 @@ def save_to_sheets():
         sheet.append_rows(vals)
         return jsonify({"status": "success"})
     except Exception as e: return jsonify({"status": "error", "message": str(e)}), 500
-
-if __name__ == '__main__':
-    load_config()
-    app.run(debug=True, port=5000)
+load_config()
